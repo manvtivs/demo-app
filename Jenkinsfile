@@ -3,6 +3,9 @@ pipeline {
     options {
         timestamps()
     }
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
     stages {
         stage('Checkout') {
             steps {
@@ -23,19 +26,34 @@ pipeline {
         }
         stage('Test') {
             steps {
-                sh './venv/bin/pytest --junitxml=result.xml'
+                sh './venv/bin/pytest --junitxml=result.xml --cov=app --cov-report=xml:coverage.xml'
             }
-       }
+        }
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    sh "${SCANNER_HOME}/bin/sonar-scanner"
+                }
+            }
+        }
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
     }
     post {
         always {
             junit 'result.xml'
         }
         success {
-            echo 'Сборка прошла успешно'
+            echo 'Сборка прошла успешно, Quality Gate пройден'
         }
         failure {
             echo 'Сборка завершилась с ошибкой'
         }
     }
 }
+
